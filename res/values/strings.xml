@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Andro16C</string>
+    <string name="app_desc">HP-16C emulator for Android</string>
+    <string name="app_about">Andro16C version @@\n&#169; 2013 Elvis Pfützenreuter\nhttp://epx.com.br</string>
+</resources>
