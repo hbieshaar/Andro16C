@@ -1,5 +1,5 @@
 <?xml version="1.0" ?>
-<manifest android:versionCode="1" android:versionName="0.1" package="br.com.epx.andro16c"
+<manifest android:versionCode="2" android:versionName="0.2" package="br.com.epx.andro16c"
 		xmlns:android="http://schemas.android.com/apk/res/android" android:installLocation="auto">
     <uses-sdk android:minSdkVersion="7" android:targetSdkVersion="10"/>
     <!-- Problem with higher SDK levels: menu button disappears! -->

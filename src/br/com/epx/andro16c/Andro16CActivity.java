@@ -45,7 +45,7 @@ public class Andro16CActivity extends Activity {
 
 	private int getMargin(double width, double height) {
 		double proportion = width / height;
-		double hp_proportion = 1024.0 / 657.0;
+		double hp_proportion = 1024.0 / (657.0 - 26);
 		if (portrait) {
 			hp_proportion = 984.0 / 1611.0;
 		}
