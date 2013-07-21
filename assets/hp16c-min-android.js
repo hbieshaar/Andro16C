@@ -387,6 +387,36 @@ H.ERROR_NUMBERFORMAT = 6; // 16C-exclusive, floating point x integer number form
 H.ERROR_DEFECTIVE = 9; // hopefully will never happen in this machine :)
 
 // FIXM15 15C errors
+
+H.make_closure = function (fname, args, asm)
+{
+	var f = function () {
+		H.machine[fname].apply(H.machine, args);
+	};
+
+	f.closure_type = "machine";
+	f.closure_name = fname;
+	f.reducible = false;
+	f.no_pgrm = 0;
+	f.asm = asm;
+
+	return f;
+};
+
+H.make_pgrm_closure = function (fname, arg, asm)
+{
+	var f = function () {
+		H.pgrm[fname].call(H.pgrm, arg);
+	};
+
+	f.closure_type = "pgrm";
+	f.closure_name = fname;
+	f.no_pgrm = 0;
+	f.asm = asm;
+
+	return f;
+};
+
 /* HP-12C emulator 
  * Copyright (c) 2011 EPx.com.br.
  * All rights reserved.
@@ -455,7 +485,15 @@ Hp12c_debug.prototype.show_memory2 = function ()
 			this.format_result(H.machine.reg_tuple("w"));
 
 		for (e = 0; e < H.machine.ram.length; ++e) {
-			windoc.getElementById("ram" + e).innerHTML = H.machine.ram[e];
+			var opcode = H.machine.ram[e];
+			var asm = H.pgrm.disassemble(opcode);
+			var txt = "";
+			
+			if (opcode && asm !== "NOP") {
+				txt = H.pgrm.disassemble(opcode) +
+					" <i>(" + opcode + ")</i>";
+			}
+			windoc.getElementById("ram" + e).innerHTML = txt;
 		}
 	}
 
@@ -548,35 +586,6 @@ Hp12c_dispatcher.init_vars = function () {
 };
 
 Hp12c_dispatcher.init_vars();
-
-H.make_closure = function (fname, args, asm)
-{
-	var f = function () {
-		H.machine[fname].apply(H.machine, args);
-	};
-
-	f.closure_type = "machine";
-	f.closure_name = fname;
-	f.reducible = false;
-	f.no_pgrm = 0;
-	f.asm = asm;
-
-	return f;
-};
-
-H.make_pgrm_closure = function (fname, arg, asm)
-{
-	var f = function () {
-		H.pgrm[fname].call(H.pgrm, arg);
-	};
-
-	f.closure_type = "pgrm";
-	f.closure_name = fname;
-	f.no_pgrm = 0;
-	f.asm = asm;
-
-	return f;
-};
 
 for (I = 0; I <= 16; ++I) {
 	// adds all functions that are common to all digits
@@ -753,8 +762,8 @@ K[I][H.STO] = H.make_closure("set_index", [], "STO I");
 K[I][H.STO_FF] = H.make_closure("set_index", [], "STO f I");
 K[I][H.STO_FF].reducible = true;
 K[I][H.STO_FF].reduced_modifier = H.STO;
-K[I][H.GTO] = H.make_pgrm_closure("gto", I, "GTO (I)");
-K[I][H.GSB] = H.make_pgrm_closure("gosub", I, "GSB (I)");
+K[I][H.GTO] = H.make_pgrm_closure("gto", I, "GTO I");
+K[I][H.GSB] = H.make_pgrm_closure("gosub", I, "GSB I");
 
 I = 33;
 
@@ -4959,8 +4968,6 @@ Hp12c_machine.prototype.prepare_for_integer_mode = function ()
 	this.reg_Set_tuple("z", {r: 0, h: 0, i: 0});
 	this.reg_Set_tuple("w", {r: 0, h: 0, i: 0});
 	this.reg_Set_tuple("last_x", {r: 0, h: 0, i: 0});
-	this.set_overflow(0);
-	this.set_carry(0);
 };
 
 Hp12c_machine.prototype.prepare_for_float_mode = function ()
@@ -5000,7 +5007,6 @@ Hp12c_machine.prototype.prepare_for_float_mode = function ()
 	this.reg_Set_tuple("y", {r: 0, h: 0, i: 0});
 	this.reg_Set_tuple("last_x", {r: 0, h: 0, i: 0});
 
-	this.set_carry(0);
 	this.wordsize = 56;
 };
 
@@ -8086,8 +8092,8 @@ H.Prng.prototype.random = function ()
 };
 
 /* These real versions are due to Isaku Wada, 2002/01/09 added */
-H.sve = 9.6;
-H.kve = "371b2d438ae7eb2337eee09c83b8f635";
+H.sve = 9.7;
+H.kve = "3526574a750bb3e3c5a63ca8dd1b6c06";
 /*jslint white: true, undef: true, nomen: true, regexp: true, strict: true, browser: true, bitwise: true */
 
 /*global H */
@@ -8416,8 +8422,15 @@ Hp12c_pgrm.prototype.p_exec_handle_special = function (op)
 Hp12c_pgrm.prototype.find_label = function (label)
 {
 	var template = Hp12c_pgrm.p_encode_instruction(H.LBL, label, 0);
+	var i;
 
-	for (var i = 1; i <= H.machine.program_limit(); ++i) {
+	// two-phase search to handle repeated labels correctly
+	for (i = H.machine.ip + 1; i <= H.machine.program_limit(); ++i) {
+		if (H.machine.ram[i] == template) {
+			return i;
+		}
+	}
+	for (i = 1; i <= H.machine.ip; ++i) {
 		if (H.machine.ram[i] == template) {
 			return i;
 		}
@@ -8877,6 +8890,53 @@ Hp12c_pgrm.prototype.rtn = function (label)
 {
 	// does not unwind stack in interactive mode
 	H.machine.ip = 0;
+};
+
+Hp12c_pgrm.prototype.dis_table = null;
+
+Hp12c_pgrm.prototype.generate_dis_table = function ()
+{
+	var K = H.dispatcher.functions;
+	var dmap = {};
+	this.dis_table = dmap;
+
+	for (var key in K) {
+		if (K.hasOwnProperty(key)) {
+			for (var modifier in K[key]) {
+				if (K[key].hasOwnProperty(modifier)) {
+					var closure = K[key][modifier];
+					if (! closure.asm) {
+						continue;
+					}
+					var is_addr = false;
+					var mnemonic = closure.asm.toUpperCase();
+					var opcode = Hp12c_pgrm.p_encode_instruction(parseInt(modifier, 10),
+											parseInt(key, 10),
+											is_addr);
+					dmap[opcode] = mnemonic; 
+				}
+			}
+		}
+	}
+};
+
+Hp12c_pgrm.prototype.disassemble = function (opcode)
+{
+	if (! this.dis_table) {
+		this.generate_dis_table();
+	}
+
+	if (H.type === "12c" || H.type === "12c-platinum") {
+		if (opcode.substr(0, 6) === "43.33.") {
+			return "GTO " + opcode.substr(6);
+		}
+	}
+
+	if (!this.dis_table[opcode]) {
+		return "???";
+	}
+
+	return this.dis_table[opcode];
 };
 /* HP-12C emulator 
  * Copyright (c) 2011 EPx.com.br.
