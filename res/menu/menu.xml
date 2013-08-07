@@ -36,5 +36,12 @@
     <item android:titleCondensed="Lock landscape" android:numericShortcut="6" android:visible="true" android:alphabeticShortcut="l" android:enabled="true" android:title="Lock landscape" android:id="@+id/locklayout1" android:orderInCategory="7"></item>
     <item android:titleCondensed="Allow rotation" android:numericShortcut="7" android:visible="true" android:alphabeticShortcut="p" android:enabled="true" android:title="Allow rotation" android:id="@+id/locklayout0" android:orderInCategory="6"></item>
      -->
-    <item android:titleCondensed="About" android:numericShortcut="8" android:alphabeticShortcut="b" android:title="About..." android:id="@+id/about" android:orderInCategory="9"></item>
+     <item android:titleCondensed="Memory" android:numericShortcut="8" android:visible="true" android:alphabeticShortcut="t" android:enabled="true" android:title="Memory files" android:id="@+id/memory" android:orderInCategory="9">
+       <menu>
+ 	<item android:id="@+id/load" android:title="Load memory" android:titleCondensed="Load memory" android:alphabeticShortcut="l" android:enabled="true" android:orderInCategory="1" android:numericShortcut="1" android:visible="true"/>
+ 	<item android:id="@+id/save" android:alphabeticShortcut="s" android:enabled="true" android:orderInCategory="2" android:numericShortcut="2" android:title="Save memory" android:titleCondensed="Save memory" android:visible="true"/>
+ 	<item android:id="@+id/delete" android:alphabeticShortcut="d" android:enabled="true" android:orderInCategory="3" android:numericShortcut="3" android:title="Delete memory" android:titleCondensed="Save memory" android:visible="true"/>
+       </menu>
+     </item>
+    <item android:titleCondensed="About" android:numericShortcut="9" android:alphabeticShortcut="b" android:title="About..." android:id="@+id/about" android:orderInCategory="9"></item>
 </menu>

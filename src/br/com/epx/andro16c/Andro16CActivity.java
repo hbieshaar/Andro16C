@@ -5,6 +5,7 @@ package br.com.epx.andro16c;
 import android.app.Activity;
 import android.content.pm.ActivityInfo;
 import android.os.Build;
+import android.os.Environment;
 import android.os.Vibrator;
 import android.content.Intent;
 import android.content.ActivityNotFoundException;
@@ -16,12 +17,19 @@ import android.content.SharedPreferences;
 import android.content.res.Configuration;
 import android.view.*;
 import android.util.DisplayMetrics;
+import android.widget.EditText;
 import android.widget.Toast;
 import android.app.AlertDialog;
 import android.content.pm.PackageManager.NameNotFoundException;
 import android.media.SoundPool;
 import android.media.AudioManager;
 import android.content.Context;
+
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.FilenameFilter;
 import java.io.IOException;
 // import android.media.SoundPool.OnLoadCompleteListener;
 import android.util.Log;
@@ -42,6 +50,11 @@ public class Andro16CActivity extends Activity {
 	int model = 0;
 	AlertDialog.Builder alt_bld;
 	AudioManager mgr;
+
+	// This is where we store saved memory files.
+	File path = new File(Environment.getExternalStorageDirectory() + "/Andro16C");
+	// Filename extension for memory files
+	String memExt = ".mem";
 
 	private int getMargin(double width, double height) {
 		double proportion = width / height;
@@ -187,6 +200,169 @@ public class Andro16CActivity extends Activity {
 		update_fullscreen_html((WebView) findViewById(R.id.webview));
 	}
 
+	// File picker dialog for memory files
+	private AlertDialog fileDg = null;
+	private String[] fileList;
+	private String lastFile = "";
+	private int fileAction = 0, choice = -1;
+
+	private void loadMemFile(int which)
+	{
+		if (which>=0) lastFile = fileList[which];
+		if (lastFile.length() == 0) return;
+		File file = new File(path, lastFile+memExt);
+		try {
+			// read the memory cookie from a previously written file (see below)
+			FileReader in = new FileReader(file);
+			BufferedReader inb = new BufferedReader(in);
+			String c = inb.readLine();
+			inb.close();
+			// update the cookie on the Java side
+			sendCookie(c);
+			// force a reload of the memory on the JavaScript side (cf. hp16c-min-android.js)
+			WebView webview = (WebView) findViewById(R.id.webview);
+			webview.loadUrl( "javascript:H.storage.load()" );
+			// update the display
+			update_fullscreen_html((WebView) findViewById(R.id.webview));
+			// give a brief feedback about which file was loaded
+			Toast.makeText(this, "Loaded " + file, Toast.LENGTH_SHORT).show();
+		} catch (IOException e) {
+			Log.e("Andro16C", "couldn't read memory file: " + e.toString());
+			Toast.makeText(this, "Couldn't load " + file, Toast.LENGTH_SHORT).show();
+		}
+	}
+
+	private void saveMemFile(int which)
+	{
+		if (which>=0) lastFile = fileList[which];
+		if (lastFile.length() == 0) return;
+		File file = new File(path, lastFile+memExt);
+		try {
+			// write the memory cookie to a file in the data directory
+			String c = recvCookie();
+			FileWriter out = new FileWriter(file);
+			out.write(c);
+			out.close();
+			// give a brief feedback about which file was saved
+			Toast.makeText(this, "Saved " + file, Toast.LENGTH_SHORT).show();
+		} catch (IOException e) {
+			Log.e("Andro16C", "couldn't write memory file: " + e.toString());
+			Toast.makeText(this, "Couldn't save " + file, Toast.LENGTH_SHORT).show();
+		}
+	}
+
+	private void deleteMemFile(int which)
+	{
+		if (which>=0) lastFile = fileList[which];
+		if (lastFile.length() == 0) return;
+		File file = new File(path, lastFile+memExt);
+		if (file.delete()) {
+			Toast.makeText(this, "Deleted " + file, Toast.LENGTH_SHORT).show();
+		} else {
+			Toast.makeText(this, "Couldn't delete " + file, Toast.LENGTH_SHORT).show();
+		}
+	}
+
+	private AlertDialog enterMemFile()
+	{
+		AlertDialog.Builder builder = new AlertDialog.Builder(this);
+
+		builder.setTitle("Name of new memory file");
+		final EditText input = new EditText(this);
+		builder.setView(input);
+		builder.setPositiveButton("OK", new DialogInterface.OnClickListener() {
+			public void onClick(DialogInterface dialog, int id) {
+				lastFile = input.getText().toString();
+				Log.d("File Picker", "new file "+lastFile);
+				saveMemFile(-1);
+			}
+		});
+		builder.setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+			public void onClick(DialogInterface dialog, int id) {
+				Log.d("File Picker", "cancel");
+			}
+		});
+		fileDg = builder.show();
+		return fileDg;
+	}
+
+	private AlertDialog chooseMemFile(int action)
+	{
+		FilenameFilter filter = new FilenameFilter() {
+			public boolean accept(File dir, String filename) {
+				File sel = new File(dir, filename);
+				return filename.endsWith(memExt) && !sel.isDirectory();
+			}
+		};
+		fileList = path.list(filter);
+		fileAction = action;
+
+		// remove filename extensions
+		int n = fileList.length;
+		for (int i = 0; i < n; i++)
+			fileList[i] = fileList[i].substring(0, fileList[i].length()-memExt.length());
+		// sort the list alphabetically
+		java.util.Arrays.sort(fileList);
+		// determine the item with the last file (if any)
+		choice = -1;
+		for (int i = 0; i < n; i++) {
+			int cmp = fileList[i].compareTo(lastFile);
+			if (cmp == 0) {
+				choice = i;
+				break;
+			} else if (cmp > 0) {
+				break;
+			}
+		}
+		if (choice < 0) lastFile = "";
+
+		if (action != 1 && (fileList == null || n <= 0)) {
+			Toast.makeText(this, "No memory files found", Toast.LENGTH_SHORT).show();
+			return null;
+		}
+
+		AlertDialog.Builder builder = new AlertDialog.Builder(this);
+
+		builder.setTitle((action==0?"Load":action==1?"Save":"Delete") + " memory file" +
+				(choice>=0?" ["+fileList[choice]+"]":"") +
+				(n>0?" : "+n+(n>1?" files":" file"):""));
+		if (fileList != null && fileList.length > 0)
+			builder.setSingleChoiceItems(fileList, choice, new DialogInterface.OnClickListener() {
+				public void onClick(DialogInterface dialog, int which) {
+					Log.d("File Picker", "choice: "+which+" "+fileList[which]);
+					choice = which;
+				}
+			});
+		builder.setPositiveButton("OK", new DialogInterface.OnClickListener() {
+			public void onClick(DialogInterface dialog, int id) {
+				Log.d("File Picker", "action: "+fileAction);
+				switch (fileAction) {
+				case 0:
+					loadMemFile(choice); break;
+				case 1:
+					saveMemFile(choice); break;
+				case 2:
+					deleteMemFile(choice); break;
+				}
+			}
+		});
+		if (action==1) {
+			builder.setNeutralButton("New", new DialogInterface.OnClickListener() {
+				public void onClick(DialogInterface dialog, int id) {
+					Log.d("File Picker", "create");
+					enterMemFile();
+				}
+			});
+		}
+		builder.setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+			public void onClick(DialogInterface dialog, int id) {
+				Log.d("File Picker", "cancel");
+			}
+		});
+	    fileDg = builder.show();
+	    return fileDg;
+	}
+
 	@Override
 	public boolean onOptionsItemSelected(MenuItem item) {
 		switch (item.getItemId()) {
@@ -242,6 +418,16 @@ public class Andro16CActivity extends Activity {
 			AlertDialog d = alt_bld.create();
 			d.show();
 			break;
+		case R.id.load: {
+			chooseMemFile(0);
+			break;
+		}
+		case R.id.save:
+			chooseMemFile(1);
+			break;
+		case R.id.delete:
+			chooseMemFile(2);
+			break;
 		}
 		SharedPreferences sp = getPreferences(Activity.MODE_PRIVATE);
 		SharedPreferences.Editor ed = sp.edit();
@@ -285,6 +471,9 @@ public class Andro16CActivity extends Activity {
 		*/
 		menu.findItem(R.id.zoomminus).setVisible(zoom_tweak > zoom_min);
 		menu.findItem(R.id.zoomplus).setVisible(zoom_tweak < zoom_max);
+		menu.findItem(R.id.load).setVisible(path.exists());
+		menu.findItem(R.id.save).setVisible(path.exists());
+		menu.findItem(R.id.delete).setVisible(path.exists());
 		return true;
 	}
 
@@ -400,6 +589,9 @@ public class Andro16CActivity extends Activity {
 		if (Build.MODEL.equals("Xelio 10 Pro")) {
 			model = 1; // tweaks specific to Odys Xelio 10 Pro tablet
 		}
+
+		// set up the data path
+		path.mkdirs();
 
 		if (locklayout == 1) {
 			setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
