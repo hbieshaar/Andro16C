@@ -326,26 +326,29 @@ public class Andro16CActivity extends Activity {
 		builder.setTitle((action==0?"Load":action==1?"Save":"Delete") + " memory file" +
 				(choice>=0?" ["+fileList[choice]+"]":"") +
 				(n>0?" : "+n+(n>1?" files":" file"):""));
-		if (fileList != null && fileList.length > 0)
+		if (fileList != null && fileList.length > 0) {
 			builder.setSingleChoiceItems(fileList, choice, new DialogInterface.OnClickListener() {
 				public void onClick(DialogInterface dialog, int which) {
 					Log.d("File Picker", "choice: "+which+" "+fileList[which]);
 					choice = which;
 				}
 			});
-		builder.setPositiveButton("OK", new DialogInterface.OnClickListener() {
-			public void onClick(DialogInterface dialog, int id) {
-				Log.d("File Picker", "action: "+fileAction);
-				switch (fileAction) {
-				case 0:
-					loadMemFile(choice); break;
-				case 1:
-					saveMemFile(choice); break;
-				case 2:
-					deleteMemFile(choice); break;
+		}
+		if (fileList.length > 0) {
+			builder.setPositiveButton("OK", new DialogInterface.OnClickListener() {
+				public void onClick(DialogInterface dialog, int id) {
+					Log.d("File Picker", "action: "+fileAction);
+					switch (fileAction) {
+					case	 0:
+						loadMemFile(choice); break;
+					case 1:
+						saveMemFile(choice); break;
+					case 2:
+						deleteMemFile(choice); break;
+					}
 				}
-			}
-		});
+			});
+		}
 		if (action==1) {
 			builder.setNeutralButton("New", new DialogInterface.OnClickListener() {
 				public void onClick(DialogInterface dialog, int id) {
